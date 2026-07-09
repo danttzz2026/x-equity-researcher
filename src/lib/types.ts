@@ -22,6 +22,7 @@ export interface ResearchRun {
   source_id: number;
   model: string;
   summary: string;
+  quality_notes: string | null;
   created_at: string;
 }
 
@@ -43,6 +44,7 @@ export interface MarketThesis {
   value_chain: string | null;
   why_it_matters: string;
   time_horizon: string | null;
+  evidence_snippets: string | null;
 }
 
 export interface Claim {
@@ -50,6 +52,7 @@ export interface Claim {
   research_run_id: number;
   claim: string;
   importance: string | null;
+  evidence_snippet: string | null;
 }
 
 export interface Ticker {
@@ -70,6 +73,14 @@ export interface TickerMention {
   value_chain_layer: string | null;
   thesis_link: string | null;
   time_horizon: string | null;
+  exchange: string | null;
+  country: string | null;
+  exposure_score: number;
+  purity_score: number;
+  asymmetry_score: number;
+  mega_cap: number;
+  evidence_snippet: string | null;
+  counter_thesis: string | null;
 }
 
 export interface SourceListItem extends Source {
@@ -86,6 +97,14 @@ export interface SourceDetailTicker {
   value_chain_layer: string | null;
   thesis_link: string | null;
   time_horizon: string | null;
+  exchange: string | null;
+  country: string | null;
+  exposure_score: number;
+  purity_score: number;
+  asymmetry_score: number;
+  mega_cap: number;
+  evidence_snippet: string | null;
+  counter_thesis: string | null;
 }
 
 export interface SourceDetail extends Source {
@@ -101,6 +120,10 @@ export interface TickerListItem {
   company_name: string;
   mention_count: number;
   source_count: number;
+  second_order_count: number;
+  avg_exposure_score: number;
+  avg_purity_score: number;
+  avg_asymmetry_score: number;
   latest_mention_at: string;
 }
 
@@ -118,12 +141,21 @@ export interface TickerDetail {
     value_chain_layer: string | null;
     thesis_link: string | null;
     time_horizon: string | null;
+    exchange: string | null;
+    country: string | null;
+    exposure_score: number;
+    purity_score: number;
+    asymmetry_score: number;
+    mega_cap: number;
+    evidence_snippet: string | null;
+    counter_thesis: string | null;
     researched_at: string;
   }>;
 }
 
 export interface ResearchResult {
   summary: string;
+  quality_notes: string[];
   themes: Array<{
     name: string;
     sector: string | null;
@@ -137,10 +169,12 @@ export interface ResearchResult {
     value_chain: string | null;
     why_it_matters: string;
     time_horizon: string | null;
+    evidence_snippets: string[];
   }>;
   claims: Array<{
     claim: string;
     importance: string | null;
+    evidence_snippet: string | null;
   }>;
   tickers: Array<{
     symbol: string;
@@ -152,5 +186,13 @@ export interface ResearchResult {
     value_chain_layer: string | null;
     thesis_link: string | null;
     time_horizon: string | null;
+    exchange: string | null;
+    country: string | null;
+    exposure_score: number;
+    purity_score: number;
+    asymmetry_score: number;
+    mega_cap: boolean;
+    evidence_snippet: string | null;
+    counter_thesis: string | null;
   }>;
 }

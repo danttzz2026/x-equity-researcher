@@ -45,6 +45,10 @@ export default function TickersPage() {
                       {ticker.mention_count} mention
                       {ticker.mention_count === 1 ? "" : "s"}
                     </span>
+                    <span>{ticker.second_order_count} second-order</span>
+                    <span>Exposure {ticker.avg_exposure_score}/5</span>
+                    <span>Purity {ticker.avg_purity_score}/5</span>
+                    <span>Asymmetry {ticker.avg_asymmetry_score}/5</span>
                     <span>Latest {formatDate(ticker.latest_mention_at)}</span>
                   </div>
                 </div>

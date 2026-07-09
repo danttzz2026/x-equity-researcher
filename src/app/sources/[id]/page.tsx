@@ -1,45 +1,24 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ConfidenceBadge,
-  MentionBadge,
-  StatusBadge,
-  formatDate,
-} from "@/components/Badges";
+import { StatusBadge, formatDate } from "@/components/Badges";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { ResearchButton } from "@/components/ResearchButton";
+import { SourceTickerExplorer } from "@/components/SourceTickerExplorer";
 import { getSourceDetail } from "@/lib/db";
-import type { SourceDetailTicker } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }> };
 
-function TickerCard({ ticker }: { ticker: SourceDetailTicker }) {
-  return (
-    <article className="ticker-card">
-      <div className="ticker-card-head">
-        <Link
-          href={`/tickers/${encodeURIComponent(ticker.symbol)}`}
-          className="ticker-symbol"
-        >
-          {ticker.symbol}
-        </Link>
-        <span>{ticker.company_name}</span>
-        <ConfidenceBadge confidence={ticker.confidence} />
-        <MentionBadge type={ticker.mention_type} />
-      </div>
-      <p>{ticker.rationale}</p>
-      <div className="meta">
-        {ticker.thesis_link ? <span>Thesis: {ticker.thesis_link}</span> : null}
-        {ticker.value_chain_layer ? (
-          <span>Layer: {ticker.value_chain_layer}</span>
-        ) : null}
-        {ticker.time_horizon ? <span>{ticker.time_horizon}</span> : null}
-        {ticker.themes ? <span>{ticker.themes}</span> : null}
-      </div>
-    </article>
-  );
+function parseJsonArray(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export default async function SourceDetailPage({ params }: Props) {
@@ -50,11 +29,25 @@ export default async function SourceDetailPage({ params }: Props) {
   const source = getSourceDetail(sourceId);
   if (!source) notFound();
 
-  const secondOrder = source.tickers.filter(
-    (t) => t.mention_type === "second_order",
+  const secondOrderCount = source.tickers.filter(
+    (ticker) => ticker.mention_type === "second_order",
+  ).length;
+  const megaCapCount = source.tickers.filter((ticker) => ticker.mega_cap).length;
+  const layerCount = new Set(
+    source.tickers
+      .map((ticker) => ticker.value_chain_layer)
+      .filter(Boolean),
+  ).size;
+  const groundedTickers = source.tickers.filter(
+    (ticker) => ticker.evidence_snippet,
   );
-  const explicit = source.tickers.filter((t) => t.mention_type === "explicit");
-  const related = source.tickers.filter((t) => t.mention_type === "related");
+  const qualityNotes = parseJsonArray(source.research?.quality_notes || null);
+  const secondOrderShare = source.tickers.length
+    ? Math.round((secondOrderCount / source.tickers.length) * 100)
+    : 0;
+  const evidenceShare = source.tickers.length
+    ? Math.round((groundedTickers.length / source.tickers.length) * 100)
+    : 0;
 
   return (
     <>
@@ -113,10 +106,47 @@ export default async function SourceDetailPage({ params }: Props) {
             </div>
           </section>
 
+          <section className="quality-strip">
+            <div>
+              <span className="quality-value">{source.tickers.length}</span>
+              <span className="quality-label">tickers</span>
+            </div>
+            <div>
+              <span className="quality-value">{secondOrderShare}%</span>
+              <span className="quality-label">second-order</span>
+            </div>
+            <div>
+              <span className="quality-value">{megaCapCount}</span>
+              <span className="quality-label">anchor names</span>
+            </div>
+            <div>
+              <span className="quality-value">{layerCount}</span>
+              <span className="quality-label">layers</span>
+            </div>
+            <div>
+              <span className="quality-value">{evidenceShare}%</span>
+              <span className="quality-label">ticker evidence</span>
+            </div>
+          </section>
+
+          {qualityNotes.length > 0 ? (
+            <section className="panel warning-panel">
+              <h2>Quality notes</h2>
+              <ul>
+                {qualityNotes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="panel">
             <h2>Exploding markets & theses</h2>
             {source.market_theses.length === 0 ? (
-              <p>No market theses extracted — re-run research with the deeper prompt.</p>
+              <p>
+                No market theses extracted — re-run research with the deeper
+                prompt.
+              </p>
             ) : (
               <div className="theme-grid">
                 {source.market_theses.map((thesis) => (
@@ -147,6 +177,13 @@ export default async function SourceDetailPage({ params }: Props) {
                         {thesis.value_chain}
                       </p>
                     ) : null}
+                    {parseJsonArray(thesis.evidence_snippets).map(
+                      (snippet) => (
+                        <blockquote key={snippet} className="evidence-snippet">
+                          {snippet}
+                        </blockquote>
+                      ),
+                    )}
                   </article>
                 ))}
               </div>
@@ -192,50 +229,18 @@ export default async function SourceDetailPage({ params }: Props) {
                   <li key={claim.id}>
                     {claim.claim}
                     {claim.importance ? ` — ${claim.importance}` : null}
+                    {claim.evidence_snippet ? (
+                      <blockquote className="evidence-snippet">
+                        {claim.evidence_snippet}
+                      </blockquote>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             )}
           </section>
 
-          <section className="panel">
-            <h2>Second-order equities</h2>
-            <p className="panel-lead">
-              Names that express the speaker&apos;s market theses through the
-              value chain — not just companies said out loud.
-            </p>
-            {secondOrder.length === 0 ? (
-              <p>No second-order names yet. Re-run research.</p>
-            ) : (
-              <div className="ticker-grid">
-                {secondOrder.map((ticker) => (
-                  <TickerCard key={ticker.symbol} ticker={ticker} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          {explicit.length > 0 ? (
-            <section className="panel">
-              <h2>Named in source</h2>
-              <div className="ticker-grid">
-                {explicit.map((ticker) => (
-                  <TickerCard key={ticker.symbol} ticker={ticker} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {related.length > 0 ? (
-            <section className="panel">
-              <h2>Related exposures</h2>
-              <div className="ticker-grid">
-                {related.map((ticker) => (
-                  <TickerCard key={ticker.symbol} ticker={ticker} />
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <SourceTickerExplorer tickers={source.tickers} />
         </div>
       )}
 

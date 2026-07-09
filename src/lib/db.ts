@@ -16,13 +16,15 @@ import type {
 } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "x-equity.db");
+const DB_PATH =
+  process.env.X_EQUITY_DB_PATH?.trim() || path.join(DATA_DIR, "x-equity.db");
 
 let dbInstance: Database.Database | null = null;
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
 }
 
@@ -35,6 +37,11 @@ export function getDb(): Database.Database {
   dbInstance.pragma("foreign_keys = ON");
   migrate(dbInstance);
   return dbInstance;
+}
+
+export function closeDbForTest() {
+  dbInstance?.close();
+  dbInstance = null;
 }
 
 function tableColumns(db: Database.Database, table: string): Set<string> {
@@ -76,6 +83,7 @@ function migrate(db: Database.Database) {
       source_id INTEGER NOT NULL UNIQUE,
       model TEXT NOT NULL,
       summary TEXT NOT NULL,
+      quality_notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
     );
@@ -99,6 +107,7 @@ function migrate(db: Database.Database) {
       value_chain TEXT,
       why_it_matters TEXT NOT NULL,
       time_horizon TEXT,
+      evidence_snippets TEXT,
       FOREIGN KEY (research_run_id) REFERENCES research_runs(id) ON DELETE CASCADE
     );
 
@@ -107,6 +116,7 @@ function migrate(db: Database.Database) {
       research_run_id INTEGER NOT NULL,
       claim TEXT NOT NULL,
       importance TEXT,
+      evidence_snippet TEXT,
       FOREIGN KEY (research_run_id) REFERENCES research_runs(id) ON DELETE CASCADE
     );
 
@@ -128,15 +138,34 @@ function migrate(db: Database.Database) {
       value_chain_layer TEXT,
       thesis_link TEXT,
       time_horizon TEXT,
+      exchange TEXT,
+      country TEXT,
+      exposure_score INTEGER NOT NULL DEFAULT 3,
+      purity_score INTEGER NOT NULL DEFAULT 3,
+      asymmetry_score INTEGER NOT NULL DEFAULT 3,
+      mega_cap INTEGER NOT NULL DEFAULT 0,
+      evidence_snippet TEXT,
+      counter_thesis TEXT,
       FOREIGN KEY (research_run_id) REFERENCES research_runs(id) ON DELETE CASCADE,
       FOREIGN KEY (ticker_id) REFERENCES tickers(id) ON DELETE CASCADE,
       UNIQUE(research_run_id, ticker_id)
     );
   `);
 
+  ensureColumn(db, "research_runs", "quality_notes", "TEXT");
+  ensureColumn(db, "market_theses", "evidence_snippets", "TEXT");
+  ensureColumn(db, "claims", "evidence_snippet", "TEXT");
   ensureColumn(db, "ticker_mentions", "value_chain_layer", "TEXT");
   ensureColumn(db, "ticker_mentions", "thesis_link", "TEXT");
   ensureColumn(db, "ticker_mentions", "time_horizon", "TEXT");
+  ensureColumn(db, "ticker_mentions", "exchange", "TEXT");
+  ensureColumn(db, "ticker_mentions", "country", "TEXT");
+  ensureColumn(db, "ticker_mentions", "exposure_score", "INTEGER NOT NULL DEFAULT 3");
+  ensureColumn(db, "ticker_mentions", "purity_score", "INTEGER NOT NULL DEFAULT 3");
+  ensureColumn(db, "ticker_mentions", "asymmetry_score", "INTEGER NOT NULL DEFAULT 3");
+  ensureColumn(db, "ticker_mentions", "mega_cap", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "ticker_mentions", "evidence_snippet", "TEXT");
+  ensureColumn(db, "ticker_mentions", "counter_thesis", "TEXT");
 }
 
 export function listSources(): SourceListItem[] {
@@ -212,11 +241,22 @@ export function getSourceDetail(id: number): SourceDetail | null {
         tm.themes,
         tm.value_chain_layer,
         tm.thesis_link,
-        tm.time_horizon
+        tm.time_horizon,
+        tm.exchange,
+        tm.country,
+        tm.exposure_score,
+        tm.purity_score,
+        tm.asymmetry_score,
+        tm.mega_cap,
+        tm.evidence_snippet,
+        tm.counter_thesis
       FROM ticker_mentions tm
       JOIN tickers t ON t.id = tm.ticker_id
       WHERE tm.research_run_id = ?
       ORDER BY
+        tm.asymmetry_score DESC,
+        tm.purity_score DESC,
+        tm.exposure_score DESC,
         CASE tm.mention_type
           WHEN 'second_order' THEN 1
           WHEN 'related' THEN 2
@@ -300,11 +340,16 @@ export function saveResearchResult(
     const run = db
       .prepare(
         `
-        INSERT INTO research_runs (source_id, model, summary)
-        VALUES (?, ?, ?)
+        INSERT INTO research_runs (source_id, model, summary, quality_notes)
+        VALUES (?, ?, ?, ?)
       `,
       )
-      .run(sourceId, model, result.summary);
+      .run(
+        sourceId,
+        model,
+        result.summary,
+        result.quality_notes.length ? JSON.stringify(result.quality_notes) : null,
+      );
 
     const runId = Number(run.lastInsertRowid);
 
@@ -326,8 +371,8 @@ export function saveResearchResult(
     const insertThesis = db.prepare(`
       INSERT INTO market_theses (
         research_run_id, name, magnitude_claim, technical_driver,
-        value_chain, why_it_matters, time_horizon
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        value_chain, why_it_matters, time_horizon, evidence_snippets
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const thesis of result.market_theses) {
@@ -339,16 +384,24 @@ export function saveResearchResult(
         thesis.value_chain,
         thesis.why_it_matters,
         thesis.time_horizon,
+        thesis.evidence_snippets.length
+          ? JSON.stringify(thesis.evidence_snippets)
+          : null,
       );
     }
 
     const insertClaim = db.prepare(`
-      INSERT INTO claims (research_run_id, claim, importance)
-      VALUES (?, ?, ?)
+      INSERT INTO claims (research_run_id, claim, importance, evidence_snippet)
+      VALUES (?, ?, ?, ?)
     `);
 
     for (const claim of result.claims) {
-      insertClaim.run(runId, claim.claim, claim.importance);
+      insertClaim.run(
+        runId,
+        claim.claim,
+        claim.importance,
+        claim.evidence_snippet,
+      );
     }
 
     const upsertTicker = db.prepare(`
@@ -364,8 +417,10 @@ export function saveResearchResult(
     const insertMention = db.prepare(`
       INSERT INTO ticker_mentions (
         research_run_id, ticker_id, confidence, rationale, mention_type,
-        themes, value_chain_layer, thesis_link, time_horizon
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        themes, value_chain_layer, thesis_link, time_horizon, exchange, country,
+        exposure_score, purity_score, asymmetry_score, mega_cap,
+        evidence_snippet, counter_thesis
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const ticker of result.tickers) {
@@ -384,6 +439,14 @@ export function saveResearchResult(
         ticker.value_chain_layer,
         ticker.thesis_link,
         ticker.time_horizon,
+        ticker.exchange,
+        ticker.country,
+        ticker.exposure_score,
+        ticker.purity_score,
+        ticker.asymmetry_score,
+        ticker.mega_cap ? 1 : 0,
+        ticker.evidence_snippet,
+        ticker.counter_thesis,
       );
     }
 
@@ -409,6 +472,10 @@ export function listTickers(): TickerListItem[] {
         t.company_name,
         COUNT(tm.id) AS mention_count,
         COUNT(DISTINCT rr.source_id) AS source_count,
+        SUM(CASE WHEN tm.mention_type = 'second_order' THEN 1 ELSE 0 END) AS second_order_count,
+        ROUND(AVG(tm.exposure_score), 1) AS avg_exposure_score,
+        ROUND(AVG(tm.purity_score), 1) AS avg_purity_score,
+        ROUND(AVG(tm.asymmetry_score), 1) AS avg_asymmetry_score,
         MAX(rr.created_at) AS latest_mention_at
       FROM tickers t
       JOIN ticker_mentions tm ON tm.ticker_id = t.id
@@ -443,13 +510,21 @@ export function getTickerDetail(symbol: string): TickerDetail | null {
         tm.value_chain_layer,
         tm.thesis_link,
         tm.time_horizon,
+        tm.exchange,
+        tm.country,
+        tm.exposure_score,
+        tm.purity_score,
+        tm.asymmetry_score,
+        tm.mega_cap,
+        tm.evidence_snippet,
+        tm.counter_thesis,
         rr.created_at AS researched_at
       FROM ticker_mentions tm
       JOIN tickers t ON t.id = tm.ticker_id
       JOIN research_runs rr ON rr.id = tm.research_run_id
       JOIN sources s ON s.id = rr.source_id
       WHERE t.symbol = ?
-      ORDER BY rr.created_at DESC
+      ORDER BY tm.asymmetry_score DESC, rr.created_at DESC
     `,
     )
     .all(normalized) as TickerDetail["mentions"];

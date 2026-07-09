@@ -47,7 +47,11 @@ export async function POST(_request: Request, { params }: Params) {
       ok: true,
       model: GEMINI_MODEL,
       ticker_count: result.tickers.length,
+      second_order_count: result.tickers.filter(
+        (ticker) => ticker.mention_type === "second_order",
+      ).length,
       theme_count: result.themes.length,
+      quality_notes: result.quality_notes,
     });
   } catch (error) {
     const message =
