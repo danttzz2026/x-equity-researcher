@@ -23,6 +23,12 @@ export async function POST(request: Request) {
       );
     }
 
+    try {
+      if (!["http:", "https:"].includes(new URL(url).protocol)) throw new Error();
+    } catch {
+      return NextResponse.json({ error: "Enter a valid http or https source URL." }, { status: 400 });
+    }
+
     const source = createSource({
       title,
       url,

@@ -1,9 +1,9 @@
-import { GEMINI_MODEL, hasApiKey } from "@/lib/gemini";
+import { RESEARCH_MODEL, hasResearchApiKey } from "@/lib/research/model";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
-  const configured = hasApiKey();
+  const configured = hasResearchApiKey();
 
   return (
     <>
@@ -25,7 +25,7 @@ export default function SettingsPage() {
             </div>
             <div className="settings-row">
               <span className="settings-label">Model</span>
-              <span className="settings-value">{GEMINI_MODEL}</span>
+              <span className="settings-value">{RESEARCH_MODEL}</span>
             </div>
             <div className="settings-row">
               <span className="settings-label">Override</span>

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { GEMINI_MODEL, hasApiKey } from "@/lib/gemini";
+import { RESEARCH_MODEL, hasResearchApiKey } from "@/lib/research/model";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   return NextResponse.json({
-    model: GEMINI_MODEL,
-    api_key_configured: hasApiKey(),
+    model: RESEARCH_MODEL,
+    api_key_configured: hasResearchApiKey(),
   });
 }

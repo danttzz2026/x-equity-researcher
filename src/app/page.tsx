@@ -1,69 +1,16 @@
 import Link from "next/link";
-import { StatusBadge, formatDate } from "@/components/Badges";
+import { SourceLibrary } from "@/components/SourceLibrary";
 import { listSources } from "@/lib/db";
+import { hasResearchApiKey } from "@/lib/research/model";
 
 export const dynamic = "force-dynamic";
-
 export default function HomePage() {
   const sources = listSources();
-
-  return (
-    <>
-      <section className="hero">
-        <h1 className="hero-brand">
-          <span className="x">X</span> Equity Researcher
-        </h1>
-        <p className="hero-copy">
-          Paste a YouTube or article link with its transcript. Extract exploding
-          market theses and technical value chains, then surface second-order
-          equities — not just the names said out loud.
-        </p>
-        <div className="hero-actions">
-          <Link href="/sources/new" className="btn btn-primary">
-            Add source
-          </Link>
-          <Link href="/tickers" className="btn btn-secondary">
-            Browse tickers
-          </Link>
-        </div>
-      </section>
-
-      <section className="section">
-        <h2 className="section-title">Library</h2>
-        {sources.length === 0 ? (
-          <div className="empty-state">
-            No sources yet. Add an episode or article to start building your
-            research desk.
-          </div>
-        ) : (
-          <div className="source-list">
-            {sources.map((source) => (
-              <Link
-                key={source.id}
-                href={`/sources/${source.id}`}
-                className="source-row"
-              >
-                <div>
-                  <h2>{source.title}</h2>
-                  <div className="meta">
-                    {source.show_host ? <span>{source.show_host}</span> : null}
-                    <span>{formatDate(source.updated_at)}</span>
-                    {source.ticker_count > 0 ? (
-                      <span>
-                        {source.ticker_count} ticker
-                        {source.ticker_count === 1 ? "" : "s"}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="row-side">
-                  <StatusBadge status={source.status} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-    </>
-  );
+  const ready = sources.filter((source) => source.research_summary).length;
+  const attention = sources.filter((source) => source.status !== "researched").length;
+  return <>
+    <section className="desk-header"><div><span className="eyebrow">Your research workspace</span><h1>Follow the evidence.</h1><p>Turn the sources you trust into investment theses you can inspect.</p></div><Link href="/sources/new" className="btn btn-primary">+ Add a source</Link></section>
+    {!hasResearchApiKey() && <div className="notice"><strong>One step before your first research run.</strong> Add your Gemini API key. <Link href="/settings">Set up research ↗</Link></div>}
+    {sources.length ? <><div className="desk-stats"><div><strong>{sources.length}</strong><span>sources collected</span></div><div><strong>{ready}</strong><span>ready to review</span></div><div><strong>{attention}</strong><span>to research</span></div></div><SourceLibrary sources={sources.map(({ id, title, url, show_host, updated_at, status, ticker_count, research_summary }) => ({ id, title, url, show_host, updated_at, status, ticker_count, research_summary }))} /></> : <section className="onboarding panel"><span className="eyebrow">Start with something worth understanding</span><h2>One source. A clearer investment thesis.</h2><div className="onboarding-steps"><div><span>01</span><h3>Bring the source</h3><p>Add an interview, podcast, or article with its transcript or text.</p></div><div><span>02</span><h3>Build the research</h3><p>Extract claims, investigate the web evidence, and connect companies to the thesis.</p></div><div><span>03</span><h3>Make up your own mind</h3><p>Read the report, inspect the quotes, and challenge the counter-thesis.</p></div></div><Link href="/sources/new" className="btn btn-primary">Add your first source →</Link></section>}
+  </>;
 }

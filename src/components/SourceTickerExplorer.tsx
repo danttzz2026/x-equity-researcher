@@ -1,196 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ConfidenceBadge, MentionBadge } from "@/components/Badges";
-import type { MentionType, SourceDetailTicker } from "@/lib/types";
+import { useState } from "react";
+import { ConfidenceBadge } from "./Badges";
+import type { SourceDetailTicker } from "@/lib/types";
 
-const MENTION_OPTIONS: Array<{ value: "all" | MentionType; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "second_order", label: "Second-order" },
-  { value: "explicit", label: "Named" },
-  { value: "related", label: "Related" },
-];
-
-function scoreLabel(label: string, value: number) {
-  return `${label} ${value}/5`;
-}
-
-function TickerCard({ ticker }: { ticker: SourceDetailTicker }) {
-  const listing = [ticker.exchange, ticker.country].filter(Boolean).join(" · ");
-
-  return (
-    <article className="ticker-card ticker-card-box">
-      <div className="ticker-card-head">
-        <Link
-          href={`/tickers/${encodeURIComponent(ticker.symbol)}`}
-          className="ticker-symbol"
-        >
-          {ticker.symbol}
-        </Link>
-        <span>{ticker.company_name}</span>
-        <ConfidenceBadge confidence={ticker.confidence} />
-        <MentionBadge type={ticker.mention_type} />
-        {ticker.mega_cap ? <span className="badge badge-anchor">anchor</span> : null}
-      </div>
-      {listing ? <div className="meta compact-meta">{listing}</div> : null}
-      <div className="score-row">
-        <span>{scoreLabel("Exposure", ticker.exposure_score)}</span>
-        <span>{scoreLabel("Purity", ticker.purity_score)}</span>
-        <span>{scoreLabel("Asymmetry", ticker.asymmetry_score)}</span>
-      </div>
-      <p>{ticker.rationale}</p>
-      {ticker.evidence_snippet ? (
-        <blockquote className="evidence-snippet">
-          {ticker.evidence_snippet}
-        </blockquote>
-      ) : null}
-      {ticker.counter_thesis ? (
-        <p>
-          <strong style={{ color: "var(--ink)" }}>Counter-thesis: </strong>
-          {ticker.counter_thesis}
-        </p>
-      ) : null}
-      <div className="meta">
-        {ticker.thesis_link ? <span>Thesis: {ticker.thesis_link}</span> : null}
-        {ticker.value_chain_layer ? (
-          <span>Layer: {ticker.value_chain_layer}</span>
-        ) : null}
-        {ticker.time_horizon ? <span>{ticker.time_horizon}</span> : null}
-        {ticker.themes ? <span>{ticker.themes}</span> : null}
-      </div>
-    </article>
-  );
-}
-
-export function SourceTickerExplorer({
-  tickers,
-}: {
-  tickers: SourceDetailTicker[];
-}) {
-  const [mentionType, setMentionType] = useState<"all" | MentionType>(
-    "second_order",
-  );
-  const [layer, setLayer] = useState("all");
-  const [minScore, setMinScore] = useState(1);
-
-  const layers = useMemo(() => {
-    return Array.from(
-      new Set(
-        tickers
-          .map((ticker) => ticker.value_chain_layer)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    ).sort((a, b) => a.localeCompare(b));
-  }, [tickers]);
-
-  const filtered = useMemo(() => {
-    return tickers
-      .filter((ticker) =>
-        mentionType === "all" ? true : ticker.mention_type === mentionType,
-      )
-      .filter((ticker) =>
-        layer === "all" ? true : ticker.value_chain_layer === layer,
-      )
-      .filter(
-        (ticker) =>
-          Math.max(
-            ticker.exposure_score,
-            ticker.purity_score,
-            ticker.asymmetry_score,
-          ) >= minScore,
-      )
-      .sort((a, b) => {
-        return (
-          b.asymmetry_score - a.asymmetry_score ||
-          b.purity_score - a.purity_score ||
-          b.exposure_score - a.exposure_score ||
-          a.symbol.localeCompare(b.symbol)
-        );
-      });
-  }, [layer, mentionType, minScore, tickers]);
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, SourceDetailTicker[]>();
-    for (const ticker of filtered) {
-      const key = ticker.thesis_link || "Unlinked thesis";
-      map.set(key, [...(map.get(key) || []), ticker]);
-    }
-    return Array.from(map.entries());
-  }, [filtered]);
-
-  return (
-    <section className="panel">
-      <div className="panel-title-row">
-        <div>
-          <h2>Equity expressions</h2>
-          <p className="panel-lead">
-            Filter the source&apos;s public-market map by thesis quality,
-            value-chain layer, and second-order exposure.
-          </p>
-        </div>
-        <span className="result-count">{filtered.length} shown</span>
-      </div>
-
-      <div className="filter-bar">
-        <label>
-          <span>Mention</span>
-          <select
-            value={mentionType}
-            onChange={(event) =>
-              setMentionType(event.currentTarget.value as "all" | MentionType)
-            }
-          >
-            {MENTION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Layer</span>
-          <select
-            value={layer}
-            onChange={(event) => setLayer(event.currentTarget.value)}
-          >
-            <option value="all">All layers</option>
-            {layers.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Minimum score</span>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={minScore}
-            onChange={(event) => setMinScore(Number(event.currentTarget.value))}
-          />
-          <strong>{minScore}/5</strong>
-        </label>
-      </div>
-
-      {grouped.length === 0 ? (
-        <p>No tickers match the current filters.</p>
-      ) : (
-        <div className="thesis-ticker-groups">
-          {grouped.map(([thesis, items]) => (
-            <div key={thesis} className="ticker-group">
-              <h3>{thesis}</h3>
-              <div className="ticker-grid">
-                {items.map((ticker) => (
-                  <TickerCard key={ticker.symbol} ticker={ticker} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
+const PAGE_SIZE = 6;
+export function SourceTickerExplorer({ tickers, sourceId }: { tickers: SourceDetailTicker[]; sourceId?: number }) {
+  const [query, setQuery] = useState("");
+  const [mention, setMention] = useState("all");
+  const [confidence, setConfidence] = useState("all");
+  const [page, setPage] = useState(0);
+  const filtered = tickers.filter((ticker) => `${ticker.symbol} ${ticker.company_name} ${ticker.rationale}`.toLowerCase().includes(query.toLowerCase()) && (mention === "all" || ticker.mention_type === mention) && (confidence === "all" || ticker.confidence === confidence)).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const activeFilters = Number(mention !== "all") + Number(confidence !== "all");
+  function reset() { setQuery(""); setMention("all"); setConfidence("all"); setPage(0); }
+  return <section className="equity-section"><div className="panel-title-row"><h2>Companies to investigate</h2><span className="result-count">{tickers.length} companies</span></div>
+    <div className="equity-toolbar"><label className="field"><span className="sr-only">Find a company</span><input type="search" value={query} placeholder="Search company or ticker" onChange={(event) => { setQuery(event.target.value); setPage(0); }} /></label><details className="equity-filters"><summary>Filters{activeFilters ? ` (${activeFilters})` : ""}</summary><div className="filter-bar"><label><span>Mention</span><select value={mention} onChange={(event) => { setMention(event.target.value); setPage(0); }}><option value="all">All</option><option value="explicit">Named</option><option value="second_order">Second-order</option><option value="related">Related</option></select></label><label><span>Confidence</span><select value={confidence} onChange={(event) => { setConfidence(event.target.value); setPage(0); }}><option value="all">All</option><option value="high">High</option><option value="medium">Medium</option><option value="speculative">Speculative</option></select></label><button className="btn btn-secondary" onClick={reset}>Reset</button></div></details></div>
+    <div className="equity-rows">{filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((ticker) => <details className="equity-row" key={ticker.symbol} name="equity-detail"><summary><span className="ticker-symbol">{ticker.symbol}</span><span className="equity-name">{ticker.company_name}</span><ConfidenceBadge confidence={ticker.confidence} /><span className="disclosure-plus" aria-hidden>+</span></summary><div className="equity-detail"><p>{ticker.rationale}</p>{ticker.counter_thesis && <p><strong>What could go wrong: </strong>{ticker.counter_thesis}</p>}{ticker.evidence_snippet && <blockquote>{ticker.evidence_snippet}</blockquote>}<div className="score-row" title="Model judgments, not measured returns"><span>Exposure {ticker.exposure_score}/5</span><span>Purity {ticker.purity_score}/5</span><span>Asymmetry {ticker.asymmetry_score}/5</span></div><div className="equity-detail-links"><Link className="text-link" href={sourceId && ticker.thesis_id ? `/sources/${sourceId}/companies/${encodeURIComponent(ticker.symbol)}` : `/tickers/${encodeURIComponent(ticker.symbol)}`}>Open company research ↗</Link>{sourceId && ticker.thesis_id && <Link className="text-link" href={`/sources/${sourceId}/theses/${ticker.thesis_id}`}>Related thesis ↗</Link>}</div></div></details>)}</div>
+    {!filtered.length && <div className="empty-state"><p>{tickers.length ? "No companies match." : "No companies retained yet."}</p>{tickers.length > 0 && <button className="btn btn-secondary" onClick={reset}>Clear filters</button>}</div>}
+    {filtered.length > 0 && <div className="list-pagination"><span className="result-count" role="status">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>{pages > 1 && <div><button aria-label="Previous companies" disabled={page === 0} onClick={() => setPage(page - 1)}>←</button><button aria-label="Next companies" disabled={page === pages - 1} onClick={() => setPage(page + 1)}>→</button></div>}</div>}
+  </section>;
 }

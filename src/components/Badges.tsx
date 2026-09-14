@@ -1,10 +1,10 @@
 import type { Confidence, MentionType, SourceStatus } from "@/lib/types";
 
 const statusLabels: Record<SourceStatus, string> = {
-  draft: "Draft",
-  researching: "Researching",
-  researched: "Researched",
-  error: "Error",
+  draft: "Ready to research",
+  researching: "In progress",
+  researched: "Research ready",
+  error: "Needs attention",
 };
 
 const mentionLabels: Record<MentionType, string> = {

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/", label: "Library" },
@@ -8,6 +11,7 @@ const links = [
 ];
 
 export function SiteHeader() {
+  const pathname = usePathname();
   return (
     <header className="site-header">
       <div className="site-header-inner">
@@ -17,7 +21,7 @@ export function SiteHeader() {
         </Link>
         <nav className="site-nav" aria-label="Primary">
           {links.map((link) => (
-            <Link key={link.href} href={link.href} className="nav-link">
+            <Link key={link.href} href={link.href} className="nav-link" aria-current={pathname === link.href || (link.href === "/tickers" && pathname.startsWith("/tickers/")) ? "page" : undefined}>
               {link.label}
             </Link>
           ))}

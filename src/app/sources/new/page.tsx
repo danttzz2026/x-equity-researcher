@@ -6,8 +6,8 @@ export default function NewSourcePage() {
       <div className="page-head">
         <h1>Add source</h1>
         <p>
-          Drop in the link and paste the transcript. Research runs after you
-          save and open the source.
+          Bring an interview, podcast, or article. Save the source material,
+          then start research when you’re ready.
         </p>
       </div>
       <AddSourceForm />
